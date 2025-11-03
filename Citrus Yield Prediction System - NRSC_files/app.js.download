@@ -1,0 +1,747 @@
+// Application State (in-memory storage)
+let appState = {
+  currentSection: 'home',
+  userData: {},
+  predictions: [],
+  charts: {}
+};
+
+// Navigation
+function initNavigation() {
+  const navLinks = document.querySelectorAll('.nav-link');
+  const navToggle = document.getElementById('navToggle');
+  const navMenu = document.querySelector('.nav-menu');
+
+  navLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = link.getAttribute('href').substring(1);
+      navigateToSection(targetId);
+      
+      // Close mobile menu
+      navMenu.classList.remove('active');
+    });
+  });
+
+  navToggle.addEventListener('click', () => {
+    navMenu.classList.toggle('active');
+  });
+}
+
+function navigateToSection(sectionId) {
+  // Hide all sections
+  document.querySelectorAll('.section').forEach(section => {
+    section.classList.remove('active');
+  });
+  
+  // Show target section
+  const targetSection = document.getElementById(sectionId);
+  if (targetSection) {
+    targetSection.classList.add('active');
+    
+    // Update nav links
+    document.querySelectorAll('.nav-link').forEach(link => {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === `#${sectionId}`) {
+        link.classList.add('active');
+      }
+    });
+    
+    appState.currentSection = sectionId;
+    
+    // Scroll to top
+    window.scrollTo(0, 0);
+    
+    // Initialize section-specific functionality
+    if (sectionId === 'prediction') initPredictionCharts();
+    if (sectionId === 'map') initMap();
+    if (sectionId === 'timeseries') initTimeSeriesCharts();
+  }
+}
+
+// Tab Navigation
+function initTabs() {
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabGroup = btn.parentElement;
+      const tabName = btn.getAttribute('data-tab');
+      
+      // Remove active class from all tabs in this group
+      tabGroup.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      
+      // Add active class to clicked tab
+      btn.classList.add('active');
+      
+      // Show corresponding content
+      const parent = tabGroup.parentElement;
+      parent.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      
+      const targetContent = document.getElementById(tabName);
+      if (targetContent) {
+        targetContent.classList.add('active');
+      }
+    });
+  });
+}
+
+// Data Upload Functions
+function saveFieldData() {
+  const fieldData = {
+    orchardName: document.getElementById('orchardName').value,
+    location: document.getElementById('location').value,
+    latitude: document.getElementById('latitude').value,
+    longitude: document.getElementById('longitude').value,
+    treeId: document.getElementById('treeId').value,
+    variety: document.getElementById('variety').value,
+    treeAge: document.getElementById('treeAge').value,
+    historicalYield: document.getElementById('historicalYield').value
+  };
+  
+  appState.userData.field = fieldData;
+  showNotification('Field data saved successfully! ✓');
+}
+
+function saveWeatherData() {
+  const weatherData = {
+    temperature: document.getElementById('temperature').value,
+    rainfall: document.getElementById('rainfall').value,
+    humidity: document.getElementById('humidity').value,
+    solarRadiation: document.getElementById('solarRadiation').value
+  };
+  
+  appState.userData.weather = weatherData;
+  showNotification('Weather data saved successfully! ✓');
+}
+
+// Vegetation Indices Calculator
+function initCalculator() {
+  const sliders = ['redBand', 'nirBand', 'greenBand', 'blueBand'];
+  
+  sliders.forEach(sliderId => {
+    const slider = document.getElementById(sliderId);
+    const valueDisplay = document.getElementById(sliderId.replace('Band', 'Value'));
+    
+    slider.addEventListener('input', () => {
+      valueDisplay.textContent = slider.value;
+    });
+  });
+}
+
+function calculateIndices() {
+  const red = parseFloat(document.getElementById('redBand').value);
+  const nir = parseFloat(document.getElementById('nirBand').value);
+  const green = parseFloat(document.getElementById('greenBand').value);
+  const blue = parseFloat(document.getElementById('blueBand').value);
+  
+  // NDVI
+  const ndvi = (nir - red) / (nir + red);
+  updateIndexDisplay('ndvi', ndvi, 0.6);
+  
+  // SAVI (L = 0.5)
+  const L = 0.5;
+  const savi = ((nir - red) / (nir + red + L)) * (1 + L);
+  updateIndexDisplay('savi', savi, 0.5);
+  
+  // GNDVI
+  const gndvi = (nir - green) / (nir + green);
+  updateIndexDisplay('gndvi', gndvi, 0.6);
+  
+  // EVI
+  const evi = 2.5 * ((nir - red) / (nir + 6 * red - 7.5 * blue + 1));
+  updateIndexDisplay('evi', evi, 0.4);
+  
+  showNotification('Vegetation indices calculated! ✓');
+}
+
+function updateIndexDisplay(indexName, value, threshold) {
+  const valueEl = document.getElementById(`${indexName}Value`);
+  const statusEl = document.getElementById(`${indexName}Status`);
+  const fillEl = document.getElementById(`${indexName}Fill`);
+  
+  valueEl.textContent = value.toFixed(3);
+  
+  // Determine status
+  let status, color;
+  if (value >= threshold) {
+    status = 'Healthy Vegetation';
+    color = '#2ecc71';
+  } else if (value >= threshold * 0.5) {
+    status = 'Moderate Vegetation';
+    color = '#f39c12';
+  } else {
+    status = 'Poor Vegetation';
+    color = '#e74c3c';
+  }
+  
+  statusEl.textContent = status;
+  statusEl.style.color = color;
+  
+  // Update progress bar
+  const percentage = Math.min(Math.max((value + 1) / 2 * 100, 0), 100);
+  fillEl.style.width = `${percentage}%`;
+  fillEl.style.background = color;
+}
+
+// Yield Prediction
+function predictYield() {
+  const ndvi = parseFloat(document.getElementById('predNdvi').value);
+  const lai = parseFloat(document.getElementById('predLai').value);
+  const canopy = parseFloat(document.getElementById('predCanopy').value);
+  const age = parseInt(document.getElementById('predAge').value);
+  const prevYield = parseFloat(document.getElementById('predPrevYield').value);
+  const prev2Yield = parseFloat(document.getElementById('predPrev2Yield').value);
+  
+  // Simulated ML prediction (Random Forest-like calculation)
+  const baseYield = 50;
+  const ndviContribution = ndvi * 80;
+  const laiContribution = lai * 15;
+  const canopyContribution = canopy * 3;
+  const ageContribution = Math.min(age, 15) * 2;
+  const historyContribution = (prevYield * 0.3 + prev2Yield * 0.1);
+  
+  const predicted = baseYield + ndviContribution + laiContribution + canopyContribution + ageContribution + historyContribution * 0.2;
+  
+  // Add some realistic variance
+  const finalPrediction = predicted * (0.95 + Math.random() * 0.1);
+  
+  // Calculate confidence (based on input quality)
+  const confidence = 0.75 + (ndvi > 0.6 ? 0.1 : 0) + (lai > 3 ? 0.05 : 0) + (prevYield > 0 ? 0.1 : 0);
+  
+  // Alternate bearing probability
+  const yieldDiff = Math.abs(prevYield - prev2Yield);
+  const alternateBearing = Math.min(yieldDiff / prevYield * 100, 100);
+  
+  // Display results
+  document.getElementById('predictedYield').textContent = `${finalPrediction.toFixed(1)} kg/tree`;
+  document.getElementById('totalYield').textContent = `${(finalPrediction * 50).toFixed(0)} kg total (50 trees)`;
+  
+  const confidencePercent = (confidence * 100).toFixed(0);
+  document.getElementById('confidenceValue').textContent = `${confidencePercent}%`;
+  document.getElementById('confidenceFill').style.width = `${confidencePercent}%`;
+  
+  document.getElementById('modelUsed').textContent = 'Random Forest';
+  document.getElementById('alternateBearing').textContent = `${alternateBearing.toFixed(0)}%`;
+  
+  // Risk level
+  let riskLevel, riskColor;
+  if (finalPrediction < 80) {
+    riskLevel = 'High';
+    riskColor = '#e74c3c';
+  } else if (finalPrediction < 120) {
+    riskLevel = 'Moderate';
+    riskColor = '#f39c12';
+  } else {
+    riskLevel = 'Low';
+    riskColor = '#2ecc71';
+  }
+  document.getElementById('riskLevel').textContent = riskLevel;
+  document.getElementById('riskLevel').style.color = riskColor;
+  
+  // Yield category
+  let category;
+  if (finalPrediction < 80) category = 'Low';
+  else if (finalPrediction < 120) category = 'Moderate';
+  else category = 'High';
+  document.getElementById('yieldCategory').textContent = category;
+  
+  // Update comparison chart
+  updateComparisonChart(prev2Yield, prevYield, finalPrediction);
+  
+  showNotification('Yield prediction completed! ✓');
+}
+
+function updateComparisonChart(prev2, prev1, predicted) {
+  const ctx = document.getElementById('comparisonChart');
+  if (!ctx) return;
+  
+  if (appState.charts.comparison) {
+    appState.charts.comparison.destroy();
+  }
+  
+  appState.charts.comparison = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['2 Years Ago', 'Last Year', 'Predicted'],
+      datasets: [{
+        label: 'Yield (kg/tree)',
+        data: [prev2, prev1, predicted],
+        backgroundColor: ['#3498db', '#e67e22', '#2ecc71'],
+        borderColor: ['#2980b9', '#d35400', '#27ae60'],
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#ecf0f1' },
+          grid: { color: 'rgba(255, 255, 255, 0.1)' }
+        },
+        x: {
+          ticks: { color: '#ecf0f1' },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function initPredictionCharts() {
+  // Feature importance chart
+  const ctx = document.getElementById('featureImportanceChart');
+  if (!ctx) return;
+  
+  if (appState.charts.featureImportance) return; // Already initialized
+  
+  appState.charts.featureImportance = new Chart(ctx, {
+    type: 'horizontalBar',
+    data: {
+      labels: ['Peak NDVI', 'LAI', 'Prev Year Yield', 'Canopy Area', 'Tree Age', 'Weather'],
+      datasets: [{
+        label: 'Importance',
+        data: [0.28, 0.22, 0.18, 0.15, 0.10, 0.07],
+        backgroundColor: '#2ecc71',
+        borderColor: '#27ae60',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          max: 0.3,
+          ticks: { color: '#ecf0f1' },
+          grid: { color: 'rgba(255, 255, 255, 0.1)' }
+        },
+        y: {
+          ticks: { color: '#ecf0f1' },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function exportResults() {
+  showNotification('Results exported to CSV! 📥');
+}
+
+// Map Functions
+let orchardMap;
+
+function initMap() {
+  if (orchardMap) return; // Already initialized
+  
+  const mapContainer = document.getElementById('orchardMap');
+  if (!mapContainer) return;
+  
+  // Initialize Leaflet map
+  orchardMap = L.map('orchardMap').setView([21.1458, 79.0882], 15);
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(orchardMap);
+}
+
+function loadSampleOrchard() {
+  if (!orchardMap) return;
+  
+  // Clear existing markers
+  orchardMap.eachLayer(layer => {
+    if (layer instanceof L.Marker) {
+      orchardMap.removeLayer(layer);
+    }
+  });
+  
+  // Add sample tree markers
+  const baseLatLng = [21.1458, 79.0882];
+  const yields = [145, 92, 118, 135, 78, 125, 88, 150, 105, 112];
+  
+  for (let i = 0; i < 10; i++) {
+    const lat = baseLatLng[0] + (Math.random() - 0.5) * 0.002;
+    const lng = baseLatLng[1] + (Math.random() - 0.5) * 0.002;
+    const yieldVal = yields[i];
+    
+    let color;
+    if (yieldVal < 80) color = '#e74c3c';
+    else if (yieldVal < 120) color = '#f39c12';
+    else color = '#2ecc71';
+    
+    const marker = L.circleMarker([lat, lng], {
+      radius: 8,
+      fillColor: color,
+      color: '#fff',
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.8
+    }).addTo(orchardMap);
+    
+    marker.bindPopup(`
+      <strong>Tree ${i + 1}</strong><br>
+      Predicted Yield: ${yieldVal} kg<br>
+      NDVI: ${(0.6 + Math.random() * 0.2).toFixed(2)}<br>
+      LAI: ${(3 + Math.random() * 2).toFixed(1)}
+    `);
+  }
+  
+  showNotification('Sample orchard loaded! 🗺️');
+}
+
+function toggleHeatmap() {
+  showNotification('Heatmap toggled!');
+}
+
+function exportMap() {
+  showNotification('Map exported! 📥');
+}
+
+// Time Series Charts
+function initTimeSeriesCharts() {
+  if (appState.charts.ndviTime) return; // Already initialized
+  
+  // NDVI Temporal Trend
+  const ctx1 = document.getElementById('ndviTimeChart');
+  if (ctx1) {
+    appState.charts.ndviTime = new Chart(ctx1, {
+      type: 'line',
+      data: {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+        datasets: [{
+          label: 'NDVI',
+          data: [0.45, 0.52, 0.68, 0.75, 0.72, 0.65, 0.58, 0.62, 0.78, 0.82, 0.70, 0.55],
+          borderColor: '#2ecc71',
+          backgroundColor: 'rgba(46, 204, 113, 0.1)',
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { labels: { color: '#ecf0f1' } }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 1,
+            ticks: { color: '#ecf0f1' },
+            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+          },
+          x: {
+            ticks: { color: '#ecf0f1' },
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  }
+  
+  // Yield History
+  const ctx2 = document.getElementById('yieldHistoryChart');
+  if (ctx2) {
+    appState.charts.yieldHistory = new Chart(ctx2, {
+      type: 'line',
+      data: {
+        labels: ['2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024'],
+        datasets: [{
+          label: 'Yield (kg/tree)',
+          data: [95, 125, 88, 135, 92, 142, 105, 148, 110, 155],
+          borderColor: '#e67e22',
+          backgroundColor: 'rgba(230, 126, 34, 0.1)',
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { labels: { color: '#ecf0f1' } }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { color: '#ecf0f1' },
+            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+          },
+          x: {
+            ticks: { color: '#ecf0f1' },
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  }
+  
+  // Alternate Bearing Pattern
+  const ctx3 = document.getElementById('alternateBearingChart');
+  if (ctx3) {
+    appState.charts.alternateBearing = new Chart(ctx3, {
+      type: 'bar',
+      data: {
+        labels: ['2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024'],
+        datasets: [
+          {
+            label: 'On Year',
+            data: [0, 125, 0, 135, 0, 142, 0, 148, 0, 155],
+            backgroundColor: '#2ecc71'
+          },
+          {
+            label: 'Off Year',
+            data: [95, 0, 88, 0, 92, 0, 105, 0, 110, 0],
+            backgroundColor: '#e74c3c'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { labels: { color: '#ecf0f1' } }
+        },
+        scales: {
+          y: {
+            stacked: true,
+            ticks: { color: '#ecf0f1' },
+            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+          },
+          x: {
+            stacked: true,
+            ticks: { color: '#ecf0f1' },
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  }
+  
+  // Growth Curve
+  const ctx4 = document.getElementById('growthCurveChart');
+  if (ctx4) {
+    appState.charts.growthCurve = new Chart(ctx4, {
+      type: 'line',
+      data: {
+        labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7', 'Week 8'],
+        datasets: [{
+          label: 'Canopy Growth',
+          data: [20, 35, 52, 68, 82, 90, 95, 98],
+          borderColor: '#3498db',
+          backgroundColor: 'rgba(52, 152, 219, 0.1)',
+          tension: 0.4,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { labels: { color: '#ecf0f1' } }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: { color: '#ecf0f1' },
+            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+          },
+          x: {
+            ticks: { color: '#ecf0f1' },
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  }
+}
+
+// Recommendations
+function showRecommendations() {
+  const scenario = document.getElementById('scenarioSelect').value;
+  const content = document.getElementById('recommendationsContent');
+  
+  const recommendations = {
+    high: [
+      'Continue current management practices',
+      'Monitor for pest and disease pressure regularly',
+      'Ensure adequate irrigation during fruit development phase',
+      'Consider fruit thinning to maintain quality',
+      'Implement canopy management for next season'
+    ],
+    moderate: [
+      'Apply balanced NPK fertilizer (500g per tree)',
+      'Consider fruit thinning to improve fruit size',
+      'Enhance irrigation frequency to 2-3 times per week',
+      'Conduct soil testing for nutrient analysis',
+      'Monitor NDVI trends for early stress detection'
+    ],
+    low: [
+      'Immediate soil testing recommended',
+      'Heavy pruning may be required to rejuvenate canopy',
+      'Check for nutrient deficiencies (especially N, P, K)',
+      'Implement comprehensive pest management program',
+      'Review and adjust irrigation schedule',
+      'Consider foliar nutrition for quick recovery'
+    ]
+  };
+  
+  const list = recommendations[scenario];
+  content.innerHTML = `
+    <ul class="recommendation-list">
+      ${list.map(item => `<li>${item}</li>`).join('')}
+    </ul>
+  `;
+}
+
+// Model Training
+function startTraining() {
+  const modelSelect = document.getElementById('modelSelect').value;
+  const progressBar = document.getElementById('trainingProgressBar');
+  const progressText = document.getElementById('progressText');
+  const statusDiv = document.getElementById('trainingStatus');
+  const progressDiv = document.getElementById('trainingProgress');
+  const metricsDiv = document.getElementById('trainingMetrics');
+  
+  statusDiv.style.display = 'none';
+  progressDiv.style.display = 'block';
+  metricsDiv.style.display = 'none';
+  
+  let progress = 0;
+  const interval = setInterval(() => {
+    progress += Math.random() * 15;
+    if (progress >= 100) {
+      progress = 100;
+      clearInterval(interval);
+      
+      // Show results
+      setTimeout(() => {
+        progressDiv.style.display = 'none';
+        metricsDiv.style.display = 'block';
+        
+        // Display metrics
+        document.getElementById('trainR2').textContent = '0.958';
+        document.getElementById('trainRMSE').textContent = '8.3 kg';
+        document.getElementById('trainMAE').textContent = '6.7 kg';
+        document.getElementById('trainTime').textContent = '2.3s';
+        
+        // Create training chart
+        createTrainingChart();
+        
+        showNotification('Model training completed! ✓');
+      }, 500);
+    }
+    
+    progressBar.style.width = `${progress}%`;
+    progressText.textContent = `${Math.floor(progress)}%`;
+  }, 200);
+}
+
+function createTrainingChart() {
+  const ctx = document.getElementById('trainingChart');
+  if (!ctx) return;
+  
+  if (appState.charts.training) {
+    appState.charts.training.destroy();
+  }
+  
+  appState.charts.training = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array.from({length: 50}, (_, i) => i + 1),
+      datasets: [
+        {
+          label: 'Training Loss',
+          data: Array.from({length: 50}, (_, i) => 1 / (1 + i * 0.1)),
+          borderColor: '#2ecc71',
+          backgroundColor: 'rgba(46, 204, 113, 0.1)',
+          tension: 0.4
+        },
+        {
+          label: 'Validation Loss',
+          data: Array.from({length: 50}, (_, i) => 1.2 / (1 + i * 0.1)),
+          borderColor: '#e67e22',
+          backgroundColor: 'rgba(230, 126, 34, 0.1)',
+          tension: 0.4
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { labels: { color: '#ecf0f1' } }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#ecf0f1' },
+          grid: { color: 'rgba(255, 255, 255, 0.1)' }
+        },
+        x: {
+          ticks: { color: '#ecf0f1' },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function downloadModel() {
+  showNotification('Model downloaded! 📥');
+}
+
+function compareModels() {
+  showNotification('Model comparison displayed!');
+}
+
+// Split ratio slider
+function initSplitRatioSlider() {
+  const slider = document.getElementById('splitRatio');
+  const value = document.getElementById('splitValue');
+  
+  if (slider && value) {
+    slider.addEventListener('input', () => {
+      const train = slider.value;
+      const test = 100 - train;
+      value.textContent = `${train}% / ${test}%`;
+    });
+  }
+}
+
+// Notifications
+function showNotification(message) {
+  const notification = document.getElementById('notification');
+  notification.textContent = message;
+  notification.classList.add('show');
+  
+  setTimeout(() => {
+    notification.classList.remove('show');
+  }, 3000);
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+  initNavigation();
+  initTabs();
+  initCalculator();
+  initSplitRatioSlider();
+  showRecommendations();
+  
+  // Show home section by default
+  navigateToSection('home');
+});

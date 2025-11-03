@@ -1,0 +1,23 @@
+Development of Yield Models for Citrus Horticulture (NRSC)
+The successful prediction of crop yield was largely based on the ability of sensors or
+imagers to detect various canopy variables such as leaf area index (LAI), leaf chlorophyll
+content, or leaf nitrogen content, which each are significantly associated with crop yield.
+Previous studies on the application of remote sensing for yield estimation and mapping
+were mainly performed on field crops. Few studies on the usefulness of remote sensing
+of orchard crops have been reported. Yield modelling of citrus is one important aspect of
+citrus orchard management. Perennial crops exhibit greater variability in canopy structure
+and fruit yield than annual crops, and this is attributed to the internal mechanism of
+alternate bearing in individual plants. Field observations of citrus trees have shown
+that there is a wide variability in the numbers of new leaves and floral buds during the
+earlier growing seasons, as well as wide variability in fruit yield. The differences in canopy
+structure among trees during particular seasons may provide information related to
+their fruit production level. If particular spectral features of canopy structure detected by
+airborne hyperspectral imagery are found to be correlated with fruit yield, these canopy
+spectral features can be used to develop a programme of tree-specific application
+to improve horticultural profitability and minimize the impact on the environment.
+Presently, yield of citrus is declined in terms of quality and quantity due to biotic, abiotic,
+edaphic as well as various management factors in India. To improve the fruit quality by
+alternate bearing though pruning and thinning of fruit of selected tree and development
+of citrus yield modelling is essentially required using geospatial techniques. The use
+of multispectral, hyper spectral and UAV data will help in the development of yield
+modelling of citrus through geospatial analysis including AI/ML techniques in India.

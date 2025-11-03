@@ -40,18 +40,23 @@ An innovative AI-powered system that predicts citrus yield using **remote sensin
 ## 🚀 Quick Start
 
 ### Installation
-Clone repository
+
+##Clone repository
+
 git clone https://github.com/YOUR_USERNAME/citrus-yield-prediction.git
 cd citrus-yield-prediction
 
-Create virtual environment
+##Create virtual environment
+
 python -m venv venv
 source venv/bin/activate # Windows: venv\Scripts\activate
 
-Install dependencies
+##Install dependencies
+
 pip install -r requirements.txt
 
-Run application
+##Run application
+
 streamlit run src/frontend/app.py
 
 
